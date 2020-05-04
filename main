@@ -1,0 +1,131 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Feb 18 20:14:53 2020
+
+@author: Goopsnice
+creates a heatmap of 1 or more 3D lambda functions. Will save image(s) to your
+working directory, if you want to make a GIF, you have to do that yourself,
+I havent figured out how to do that yet
+
+"""
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
+
+# Creates a 1024 list of RGB tuples
+RGB_list = []
+Rd = 255
+Gd = 255
+Bd = 255
+
+for i in range(256):
+    RGB_list.append((255, i, 0))
+for i in range(256):
+    RGB_list.append((Rd, 255, 0))
+    Rd -= 1    
+for i in range(256):
+    RGB_list.append((0, 255, i))   
+for i in range(256):
+    RGB_list.append((0, Gd, 255))
+    Gd -= 1
+
+
+class Heat:
+    def __init__(self, samples=1000, xmin=-1, xmax=1, ymin=-1, ymax=1, scale = 50):
+        self._scale = scale 
+        self._samples = samples
+        self._xmin = xmin
+        self._xmax = xmax
+        self._ymin = ymin
+        self._ymax = ymax
+    '''
+    makes a grid of value 0 through which a function can be run through
+    when the function does run through the grid, it's using the index of each item for x and y, 
+    to calculate the z value. So appending 0 is arbitrary, it would work whatever
+    value is being appended   
+    '''          
+    def grid(self):
+        x_ax = []
+        y_ax = []
+        for i in range(self._samples):
+            x_ax.append(0)
+        for j in range(self._samples):
+            y_ax.append(x_ax)
+        grid = np.array(y_ax)
+        return grid
+        
+    #centres the grid properly so that origin is in the middle    
+    def centre (self, x, y):
+        centx = x - (self._samples)/2
+        centy = y - (self._samples)/2
+        return centx, centy
+
+    # scales to make the image a nicer size. I am fairly sure this step is redundant
+    # if you know more about writing 3D functions.
+    def scale(self, x, y):
+        X = x/self._scale
+        Y = y/self._scale
+        return X, Y
+    
+
+    def censcal(self, X, Y):
+        B, C = self.centre(X, Y)
+        B, C = self.scale(B, C)
+        return B, C
+
+    def normalise(self, arr):
+        arrMin = np.min(arr)
+        arrMax = np.max(arr)
+        arr = arr - arrMin
+        return arr / (arrMax - arrMin)
+    
+    # rund the function through the grid
+    def run_func(self, f, name):
+        Gr = self.grid()
+        x = len(Gr)
+        y = len(Gr[0])
+        funGrid = []
+        for a in range(x):
+            funRow = []
+            for b in range(y):
+                q, p = self.censcal(a, b)
+                Val = f(q, p) 
+                funRow.append(Val)
+            funGrid.append(funRow)
+        
+        funGrid = np.array(funGrid)
+        funGrid = self.normalise(funGrid)    
+        '''
+        Makes a 1024 list between 0 and 1 (same length as the RGB tuple list)
+        As the data is normalised between 0 and 1, we find the closest value
+        in RGBnum_list and then find the tuple with the same index in RGB_list, 
+        thus making a heatmap when fed into an image
+        '''
+        RGBnum_list = np.linspace(0, 1, 1024)
+        ref_list = []
+        arrRGB_list = []
+        funGrid = funGrid.flatten()
+        for i in range(len(funGrid)):
+            ref_list.append(np.searchsorted(RGBnum_list, funGrid[i]))
+        for i in range(len(ref_list)):
+            arrRGB_list.append(RGB_list[ref_list[i]])
+        im = Image.new('RGB', (self._samples, self._samples))
+        im.putdata(arrRGB_list)
+        im.save(str(name) +'.jpeg')
+
+    
+Heat_map = Heat(xmin=-10, xmax=10, ymin=-10, ymax=10, samples=400, scale = 70)
+
+
+'''
+You can make a little loop and change values in your function. If you want to change in 
+way that isnt starting at 0 and getting 1 higher each loop, you'll have to make a list
+and then feed in the values.
+'''
+for j in range(40):
+    xx= Heat_map.run_func(lambda x, y : np.exp(1)**-(x**2 + y**2)*(np.sin((np.pi*2+(j/4))*((10)*(j+1)*(x**2 + y**2)/10))), 'ripple' + str(j))
+    #xx = Heat_map.run_func((lambda x, y : np.exp(1)**-((j+1)*x)*np.sin(np.pi*(j+2)*(x+(j+1)+y**2))), 'exp' + str(j))
+
+
